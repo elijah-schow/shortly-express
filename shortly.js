@@ -93,7 +93,31 @@ app.get('/login', function(req, res) {
 });
 
 app.post('/login', function(req, res) {
-  res.end('POST /login');
+  var username = req.body.username;
+  var plaintext = req.body.password;
+
+  new User({username: username})
+    .fetch()
+    .then(function(found) {
+      if (found) {
+        var hash = found.get('password_hash');
+        bcrypt.compare(plaintext, hash, function(err, valid) {
+          if (valid) {
+            // log user in
+            req.session.regenerate(function () {
+              req.session.user = found.get('id');
+              res.redirect('/');
+            });
+          } else {
+            // the password was wrong
+            res.redirect('/login');
+          }
+        });
+      } else {
+        // user does not exist
+        res.redirect('/login');
+      }
+    });
 });
 
 app.get('/signup', function(req, res) {
@@ -108,17 +132,15 @@ app.post('/signup', function(req, res) {
     .fetch()
     .then(function(found) {
       if (found) { throw 'Username already taken.'; }
-      bcrypt.genSalt(environment.saltRounds, function(error, salt) {
-        bcrypt.hash(plaintext, salt, null, function(error, hash) {
-          if (error) { throw error; }
-          Users.create({
-            'username': username,
-            'password_hash': hash
-          })
-          .then(function(newUser) {
-            // log the user in
-            res.status(201).redirect('/');
-          });
+      bcrypt.hash(plaintext, null, null, function(error, hash) {
+        if (error) { throw error; }
+        Users.create({
+          'username': username,
+          'password_hash': hash
+        })
+        .then(function(newUser) {
+          // log the user in
+          res.status(201).redirect('/');
         });
       });
     });
