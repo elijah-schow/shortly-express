@@ -5,15 +5,16 @@ var bodyParser = require('body-parser');
 var session = require('express-session');
 var environment = require('./env/environment');
 
-
 var db = require('./app/config');
 var Users = require('./app/collections/users');
 var User = require('./app/models/user');
 var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
+var bcrypt = require('bcrypt-nodejs');
 
 var app = express();
+
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
@@ -26,34 +27,32 @@ app.use(express.static(__dirname + '/public'));
 
 app.use(session({
   secret: environment.sessionSecret,
-  resave: false,
-  saveUninitialized: false
+  resave: false, // don't save session if unmodified
+  saveUninitialized: false // don't create session until something stored
 }));
 
-app.all('/', authenticate);
-
-app.all('/create', authenticate);
-
-app.all('/links', authenticate);
-
-app.get('/', 
+app.get('/',
+util.checkUser,
 function(req, res) {
   res.render('index');
 });
 
 app.get('/create', 
+util.checkUser,
 function(req, res) {
   res.render('index');
 });
 
-app.get('/links', 
+app.get('/links',
+util.checkUser, 
 function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.status(200).send(links.models);
   });
 });
 
-app.post('/links', 
+app.post('/links',
+util.checkUser,
 function(req, res) {
   var uri = req.body.url;
 
@@ -89,16 +88,46 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 
-function authenticate (req, res, next) {
+app.get('/login', function(req, res) {
+  res.render('login');
+});
 
-  // is user authenticated?
-  if (req.session.userId === undefined) {
-    console.log('NOT LOGGED IN');
-    res.render('login');    
-  } else {
-    next();
-  }
-}
+app.post('/login', function(req, res) {
+  res.end('POST /login');
+});
+
+app.get('/signup', function(req, res) {
+  res.render('signup');
+});
+
+app.post('/signup', function(req, res) {
+  var username = req.body.username;
+  var plaintext = req.body.password;
+
+  new User({username: username})
+    .fetch()
+    .then(function(found) {
+      if (found) { throw 'Username already taken.'; }
+      bcrypt.genSalt(environment.saltRounds, function(error, salt) {
+        bcrypt.hash(plaintext, salt, null, function(error, hash) {
+          if (error) { throw error; }
+          Users.create({
+            'username': username,
+            'password_hash': hash
+          })
+          .then(function(newUser) {
+            // log the user in
+            res.status(201).redirect('/');
+          });
+        });
+      });
+    });
+});
+
+app.get('/logout', function(req, res) {
+  res.end('get /logout');
+});
+
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
@@ -115,7 +144,7 @@ app.get('/*', function(req, res) {
         linkId: link.get('id')
       });
 
-      click.save().then(function() {
+      click.save().db(function() {
         link.set('visits', link.get('visits') + 1);
         link.save().then(function() {
           return res.redirect(link.get('url'));
