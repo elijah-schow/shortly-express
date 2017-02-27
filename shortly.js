@@ -2,6 +2,8 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
+var session = require('express-session');
+var environment = require('./env/environment');
 
 
 var db = require('./app/config');
@@ -22,6 +24,17 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 
+app.use(session({
+  secret: environment.sessionSecret,
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.all('/', authenticate);
+
+app.all('/create', authenticate);
+
+app.all('/links', authenticate);
 
 app.get('/', 
 function(req, res) {
@@ -76,7 +89,16 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 
+function authenticate (req, res, next) {
 
+  // is user authenticated?
+  if (req.session.userId === undefined) {
+    console.log('NOT LOGGED IN');
+    res.render('login');    
+  } else {
+    next();
+  }
+}
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
