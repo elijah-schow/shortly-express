@@ -166,7 +166,7 @@ app.get('/*', function(req, res) {
         linkId: link.get('id')
       });
 
-      click.save().db(function() {
+      click.save().then(function() {
         link.set('visits', link.get('visits') + 1);
         link.save().then(function() {
           return res.redirect(link.get('url'));

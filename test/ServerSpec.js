@@ -73,15 +73,15 @@ describe('', function() {
       });
   });
 
-  xdescribe('Link creation:', function() {
+  describe('Link creation:', function() {
 
     var requestWithSession = request.defaults({jar: true});
 
-    xbeforeEach(function(done) {
+    beforeEach(function(done) {
       // create a user that we can then log-in with
       new User({
         'username': 'Phillip',
-        'password': 'Phillip'
+        'password_hash': bcrypt.hashSync('Phillip')
       }).save().then(function() {
         var options = {
           'method': 'POST',
