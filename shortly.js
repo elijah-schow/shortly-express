@@ -135,9 +135,11 @@ app.post('/signup', (req, res) => {
         'username': username,
         'password': hash
       })
-      .then(function(newUser) {
-        // log the user in
-        res.status(201).redirect('/');
+      .then(function(user) {
+        req.session.regenerate(function () {
+          req.session.user = user.get('id');
+          res.redirect('/');
+        });
       });
     });
 });
