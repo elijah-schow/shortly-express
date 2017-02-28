@@ -132,18 +132,21 @@ app.post('/signup', (req, res) => {
   new User({username: username})
     .fetch()
     .then(found => {
-      if (found) { throw 'Username already taken.'; }
-      bcrypt.hash(plaintext, null, null, (error, hash) => {
-        if (error) { throw error; }
-        Users.create({
-          'username': username,
-          'password_hash': hash
-        })
-        .then(newUser => {
-          // log the user in
-          res.status(201).redirect('/');
+      if (found) {
+        res.status(409).send('That username is taken');
+      } else {
+        bcrypt.hash(plaintext, null, null, (error, hash) => {
+          if (error) { throw error; }
+          Users.create({
+            'username': username,
+            'password_hash': hash
+          })
+          .then(newUser => {
+            // log the user in
+            res.status(201).redirect('/');
+          });
         });
-      });
+      }
     });
 });
 
