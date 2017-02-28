@@ -5,6 +5,7 @@ var bodyParser = require('body-parser');
 var session = require('express-session');
 var environment = require('./env/environment');
 var sodium = require('sodium').api;
+var Promise = require('bluebird');
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -96,26 +97,30 @@ app.post('/login', (req, res) => {
   var username = req.body.username;
   var plaintext = req.body.password; // user input
 
-  new User({username: username})
+  var loginAs = new User({ username: username })
     .fetch()
-    .then(found => {
-      if (found) {
-        var hash = found.get('password'); // from database
-        if (util.verifyPassword(hash, plaintext)) {
-          // log user in
-          req.session.regenerate(function () {
-            req.session.user = found.get('id');
-            res.redirect('/');
-          });
-        } else {
-          // the password was wrong
-          res.redirect('/login');
-        }
-      } else {
-        // user does not exist
-        res.redirect('/login');
+    .then(user => {
+      if (!user) {
+        return Promise.reject('User does not exist');
       }
+      var hash = user.get('password'); // from database
+      if (!util.verifyPassword(hash, plaintext)) {
+        return Promise.reject('Wrong password');
+      }
+      return Promise.resolve(user);
     });
+
+  var newSession = Promise.promisify(req.session.regenerate);
+
+  Promise.join(loginAs, newSession, (user) => {
+    req.session.user = user.id;
+    res.redirect('/');
+  })
+  .catch(error => {
+    console.log('Failed to log in\n', error);
+    res.send(401, 'Invalid username or password');
+  });
+
 });
 
 app.get('/signup', (req, res) => {
@@ -127,21 +132,28 @@ app.post('/signup', (req, res) => {
   var plaintext = req.body.password;
   var hash = util.hashPassword(plaintext);
 
-  new User({username: username})
+  var newUser = new User({username: username})
     .fetch()
     .then(function(found) {
-      if (found) { throw 'Username already taken.'; }
-      Users.create({
+      if (found) {
+        return Promise.reject('Username already taken.');
+      }
+      return Users.create({
         'username': username,
         'password': hash
-      })
-      .then(function(user) {
-        req.session.regenerate(function () {
-          req.session.user = user.get('id');
-          res.redirect('/');
-        });
       });
-    });
+    })
+
+  var newSession = Promise.promisify(req.session.regenerate);
+
+  Promise.join(newUser, newSession, (user) => {
+    req.session.user = user.id;
+    res.redirect('/');
+  })
+  .catch(error => {
+    console.log('Failed to create account\n', error);
+    res.send(409, error);
+  });
 });
 
 app.get('/logout', (req, res) => {
