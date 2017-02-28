@@ -110,7 +110,8 @@ app.post('/login', function(req, res) {
             });
           } else {
             // the password was wrong
-            res.redirect('/login');
+            res.status(401).send('Your password is incorrect.');
+            //res.redirect('/login');
           }
         });
       } else {
@@ -147,7 +148,8 @@ app.post('/signup', function(req, res) {
 });
 
 app.get('/logout', function(req, res) {
-  res.end('get /logout');
+  req.session.destroy();
+  res.redirect('/login');
 });
 
 
