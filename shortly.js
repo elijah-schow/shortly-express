@@ -4,6 +4,7 @@ var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var session = require('express-session');
 var environment = require('./env/environment');
+var sodium = require('sodium').api;
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -11,7 +12,6 @@ var User = require('./app/models/user');
 var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
-var bcrypt = require('bcrypt-nodejs');
 
 var app = express();
 
@@ -37,14 +37,14 @@ function(req, res) {
   res.render('index');
 });
 
-app.get('/create', 
+app.get('/create',
 util.checkUser,
 function(req, res) {
   res.render('index');
 });
 
 app.get('/links',
-util.checkUser, 
+util.checkUser,
 function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.status(200).send(links.models);
@@ -94,25 +94,23 @@ app.get('/login', function(req, res) {
 
 app.post('/login', function(req, res) {
   var username = req.body.username;
-  var plaintext = req.body.password;
+  var plaintext = req.body.password; // user input
 
   new User({username: username})
     .fetch()
     .then(function(found) {
       if (found) {
-        var hash = found.get('password_hash');
-        bcrypt.compare(plaintext, hash, function(err, valid) {
-          if (valid) {
-            // log user in
-            req.session.regenerate(function () {
-              req.session.user = found.get('id');
-              res.redirect('/');
-            });
-          } else {
-            // the password was wrong
-            res.redirect('/login');
-          }
-        });
+        var hash = found.get('password'); // from database
+        if (util.verifyPassword(hash, plaintext)) {
+          // log user in
+          req.session.regenerate(function () {
+            req.session.user = found.get('id');
+            res.redirect('/');
+          });
+        } else {
+          // the password was wrong
+          res.redirect('/login');
+        }
       } else {
         // user does not exist
         res.redirect('/login');
@@ -127,21 +125,19 @@ app.get('/signup', function(req, res) {
 app.post('/signup', function(req, res) {
   var username = req.body.username;
   var plaintext = req.body.password;
+  var hash = util.hashPassword(plaintext);
 
   new User({username: username})
     .fetch()
     .then(function(found) {
       if (found) { throw 'Username already taken.'; }
-      bcrypt.hash(plaintext, null, null, function(error, hash) {
-        if (error) { throw error; }
-        Users.create({
-          'username': username,
-          'password_hash': hash
-        })
-        .then(function(newUser) {
-          // log the user in
-          res.status(201).redirect('/');
-        });
+      Users.create({
+        'username': username,
+        'password': hash
+      })
+      .then(function(newUser) {
+        // log the user in
+        res.status(201).redirect('/');
       });
     });
 });
