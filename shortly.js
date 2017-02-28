@@ -4,6 +4,7 @@ var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var session = require('express-session');
 var environment = require('./env/environment');
+var sodium = require('sodium').api;
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -11,7 +12,6 @@ var User = require('./app/models/user');
 var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
-var bcrypt = require('bcrypt-nodejs');
 
 var app = express();
 
@@ -94,26 +94,23 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res) => {
   var username = req.body.username;
-  var plaintext = req.body.password;
+  var plaintext = req.body.password; // user input
 
   new User({username: username})
     .fetch()
     .then(found => {
       if (found) {
-        var hash = found.get('password_hash');
-        bcrypt.compare(plaintext, hash, (err, valid) => {
-          if (valid) {
-            // log user in
-            req.session.regenerate(function () {
-              req.session.user = found.get('id');
-              res.redirect('/');
-            });
-          } else {
-            // the password was wrong
-            res.status(401).send('Your password is incorrect.');
-            //res.redirect('/login');
-          }
-        });
+        var hash = found.get('password'); // from database
+        if (util.verifyPassword(hash, plaintext)) {
+          // log user in
+          req.session.regenerate(function () {
+            req.session.user = found.get('id');
+            res.redirect('/');
+          });
+        } else {
+          // the password was wrong
+          res.redirect('/login');
+        }
       } else {
         // user does not exist
         res.redirect('/login');
@@ -128,28 +125,20 @@ app.get('/signup', (req, res) => {
 app.post('/signup', (req, res) => {
   var username = req.body.username;
   var plaintext = req.body.password;
+  var hash = util.hashPassword(plaintext);
 
   new User({username: username})
     .fetch()
-    .then(found => {
-      if (found) {
-        res.status(409).send('That username is taken');
-      } else {
-        bcrypt.hash(plaintext, null, null, (error, hash) => {
-          if (error) { throw error; }
-          Users.create({
-            'username': username,
-            'password_hash': hash
-          })
-          .then(user => {
-            // log the user in
-            req.session.regenerate(function () {
-              req.session.user = user.get('id');
-              res.redirect('/');
-            });
-          });
-        });
-      }
+    .then(function(found) {
+      if (found) { throw 'Username already taken.'; }
+      Users.create({
+        'username': username,
+        'password': hash
+      })
+      .then(function(newUser) {
+        // log the user in
+        res.status(201).redirect('/');
+      });
     });
 });
 
