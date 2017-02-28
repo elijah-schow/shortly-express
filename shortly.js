@@ -37,16 +37,16 @@ function(req, res) {
   res.render('index');
 });
 
-app.get('/create', 
+app.get('/create',
 util.checkUser,
 function(req, res) {
   res.render('index');
 });
 
 app.get('/links',
-util.checkUser, 
+util.checkUser,
 function(req, res) {
-  Links.reset().fetch().then(function(links) {
+  Links.reset().fetch().then(links => {
     res.status(200).send(links.models);
   });
 });
@@ -61,11 +61,11 @@ function(req, res) {
     return res.sendStatus(404);
   }
 
-  new Link({ url: uri }).fetch().then(function(found) {
+  new Link({ url: uri }).fetch().then(found => {
     if (found) {
       res.status(200).send(found.attributes);
     } else {
-      util.getUrlTitle(uri, function(err, title) {
+      util.getUrlTitle(uri, (err, title) => {
         if (err) {
           console.log('Error reading URL heading: ', err);
           return res.sendStatus(404);
@@ -76,7 +76,7 @@ function(req, res) {
           title: title,
           baseUrl: req.headers.origin
         })
-        .then(function(newLink) {
+        .then(newLink => {
           res.status(200).send(newLink);
         });
       });
@@ -88,20 +88,20 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 
-app.get('/login', function(req, res) {
+app.get('/login', (req, res) => {
   res.render('login');
 });
 
-app.post('/login', function(req, res) {
+app.post('/login', (req, res) => {
   var username = req.body.username;
   var plaintext = req.body.password;
 
   new User({username: username})
     .fetch()
-    .then(function(found) {
+    .then(found => {
       if (found) {
         var hash = found.get('password_hash');
-        bcrypt.compare(plaintext, hash, function(err, valid) {
+        bcrypt.compare(plaintext, hash, (err, valid) => {
           if (valid) {
             // log user in
             req.session.regenerate(function () {
@@ -121,25 +121,25 @@ app.post('/login', function(req, res) {
     });
 });
 
-app.get('/signup', function(req, res) {
+app.get('/signup', (req, res) => {
   res.render('signup');
 });
 
-app.post('/signup', function(req, res) {
+app.post('/signup', (req, res) => {
   var username = req.body.username;
   var plaintext = req.body.password;
 
   new User({username: username})
     .fetch()
-    .then(function(found) {
+    .then(found => {
       if (found) { throw 'Username already taken.'; }
-      bcrypt.hash(plaintext, null, null, function(error, hash) {
+      bcrypt.hash(plaintext, null, null, (error, hash) => {
         if (error) { throw error; }
         Users.create({
           'username': username,
           'password_hash': hash
         })
-        .then(function(newUser) {
+        .then(newUser => {
           // log the user in
           res.status(201).redirect('/');
         });
@@ -147,7 +147,7 @@ app.post('/signup', function(req, res) {
     });
 });
 
-app.get('/logout', function(req, res) {
+app.get('/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/login');
 });
@@ -159,8 +159,8 @@ app.get('/logout', function(req, res) {
 // If the short-code doesn't exist, send the user to '/'
 /************************************************************/
 
-app.get('/*', function(req, res) {
-  new Link({ code: req.params[0] }).fetch().then(function(link) {
+app.get('/*', (req, res) => {
+  new Link({ code: req.params[0] }).fetch().then( link => {
     if (!link) {
       res.redirect('/');
     } else {
@@ -168,9 +168,9 @@ app.get('/*', function(req, res) {
         linkId: link.get('id')
       });
 
-      click.save().then(function() {
+      click.save().then(() => {
         link.set('visits', link.get('visits') + 1);
-        link.save().then(function() {
+        link.save().then(() => {
           return res.redirect(link.get('url'));
         });
       });
