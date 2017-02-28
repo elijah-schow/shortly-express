@@ -47,7 +47,9 @@ function(req, res) {
 app.get('/links',
 util.checkUser,
 function(req, res) {
-  Links.reset().fetch().then(links => {
+  Links.query( qb => {
+    qb.where('user_id', req.session.user)
+  }).fetch().then(links => {
     res.status(200).send(links.models);
   });
 });
@@ -75,7 +77,8 @@ function(req, res) {
         Links.create({
           url: uri,
           title: title,
-          baseUrl: req.headers.origin
+          baseUrl: req.headers.origin,
+          user_id: req.session.user
         })
         .then(newLink => {
           res.status(200).send(newLink);
@@ -94,23 +97,23 @@ app.get('/login', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-  var username = req.body.username;
-  var plaintext = req.body.password; // user input
 
-  var loginAs = new User({ username: username })
+  var loginAs = new User({ username: req.body.username })
     .fetch()
     .then(user => {
       if (!user) {
         return Promise.reject('User does not exist');
       }
       var hash = user.get('password'); // from database
-      if (!util.verifyPassword(hash, plaintext)) {
+      if (!util.verifyPassword(hash, req.body.password)) {
         return Promise.reject('Wrong password');
       }
       return Promise.resolve(user);
     });
 
-  var newSession = Promise.promisify(req.session.regenerate);
+  var newSession = loginAs.then( () => {
+    return Promise.promisify(req.session.regenerate);
+  });
 
   Promise.join(loginAs, newSession, (user) => {
     req.session.user = user.id;
